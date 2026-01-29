@@ -6,35 +6,24 @@ const cors = require("cors");
 
 const app = express();
 
-app.use(cors({
-  origin: "*"
-}));
-
+app.use(cors());
 app.use(express.json());
 
-/* ================= MYSQL CONNECTION ================= */
-
 const db = mysql.createConnection({
-  host: "railway-host",
-  user: "railway-user",
-  password: "railway-pass",
-  database: "railway-db"
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASS,
+  database: process.env.DB_NAME
 });
-
-
 
 db.connect(err => {
-  if (err) {
-    console.log("MySQL error:", err);
-  } else {
-    console.log("MySQL Connected");
-  }
+  if (err) console.log("MySQL error:", err);
+  else console.log("MySQL Connected");
 });
 
-/* ================= LOGIN ================= */
+/* LOGIN */
 
 app.post("/login", (req, res) => {
-
   const { email, password } = req.body;
 
   db.query(
@@ -42,11 +31,8 @@ app.post("/login", (req, res) => {
     [email, password],
     (err, result) => {
 
-      if (err) return res.json({ success: false });
-
-      if (result.length === 0) {
+      if (err || result.length === 0)
         return res.json({ success: false });
-      }
 
       const user = result[0];
 
@@ -62,78 +48,59 @@ app.post("/login", (req, res) => {
   );
 });
 
-/* ================= ADD PRODUCTIVITY ================= */
+/* ADD RECORD */
 
 app.post("/records", (req, res) => {
-
   const { date, task, userId } = req.body;
 
   db.query(
     "INSERT INTO productivity (date, task, user_id) VALUES (?, ?, ?)",
     [date, task, userId],
     err => {
-
-      if (err) {
-        console.log(err);
-        return res.status(500).send("DB Error");
-      }
-
+      if (err) return res.status(500).send("DB Error");
       res.send("Saved");
     }
   );
 });
 
-/* ================= GET ALL RECORDS (ADMIN) ================= */
+/* ADMIN RECORDS */
 
 app.get("/records", (req, res) => {
 
   const sql = `
-    SELECT productivity.date, productivity.task, users.name
-    FROM productivity
-    JOIN users ON productivity.user_id = users.id
-    ORDER BY productivity.date DESC
+    SELECT p.date, p.task, u.name
+    FROM productivity p
+    JOIN users u ON p.user_id = u.id
+    ORDER BY p.date DESC
   `;
 
   db.query(sql, (err, result) => {
-
-    if (err) {
-      console.log(err);
-      return res.status(500).send("DB Error");
-    }
-
+    if (err) return res.status(500).send("DB Error");
     res.json(result);
   });
 });
 
-/* ================= GET USER RECORDS ================= */
+/* USER RECORDS */
 
 app.get("/records/:userId", (req, res) => {
 
-  const userId = req.params.userId;
-
   db.query(
     "SELECT date, task FROM productivity WHERE user_id=? ORDER BY date DESC",
-    [userId],
+    [req.params.userId],
     (err, result) => {
-
-      if (err) {
-        console.log(err);
-        return res.status(500).send("DB Error");
-      }
-
+      if (err) return res.status(500).send("DB Error");
       res.json(result);
     }
   );
 });
 
-/* ============ GET RECORDS BY DATE ============ */
+/* FILTER BY DATE */
 
 app.get("/records-by-date", (req, res) => {
 
   const { date, userId, role } = req.query;
 
-  let sql = "";
-  let params = [];
+  let sql, params;
 
   if (role === "admin") {
 
@@ -142,7 +109,6 @@ app.get("/records-by-date", (req, res) => {
       FROM productivity p
       JOIN users u ON p.user_id = u.id
       WHERE DATE(p.date) = ?
-      ORDER BY u.name
     `;
 
     params = [date];
@@ -153,26 +119,19 @@ app.get("/records-by-date", (req, res) => {
       SELECT DATE(date) as date, task
       FROM productivity
       WHERE DATE(date) = ? AND user_id = ?
-      ORDER BY date
     `;
 
     params = [date, userId];
   }
 
   db.query(sql, params, (err, result) => {
-
-    if (err) {
-      console.log(err);
-      return res.status(500).send("DB Error");
-    }
-
+    if (err) return res.status(500).send("DB Error");
     res.json(result);
   });
 });
 
+const PORT = process.env.PORT || 5000;
 
-/* ================= SERVER ================= */
-
-app.listen(5000, () => {
-  console.log("Server running on port 5000");
+app.listen(PORT, () => {
+  console.log("Server running on port", PORT);
 });
