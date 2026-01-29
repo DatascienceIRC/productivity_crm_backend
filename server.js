@@ -130,6 +130,17 @@ app.get("/records-by-date", (req, res) => {
   });
 });
 
+app.get("/test-users", (req, res) => {
+  db.query("SELECT * FROM users", (err, rows) => {
+    if (err) {
+      console.log(err);
+      return res.status(500).send("DB error");
+    }
+    res.json(rows);
+  });
+});
+
+
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
