@@ -9,21 +9,17 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-/* ================= MONGODB CONNECTION ================= */
+/* ================= MONGODB ================= */
 
-const uri = process.env.MONGO_URI; // add this in Render env vars
+const uri = process.env.MONGO_URI;
 const client = new MongoClient(uri);
 
 let db;
 
 async function connectDB() {
-  try {
-    await client.connect();
-    db = client.db("productivity_crm_db");
-    console.log("MongoDB Connected Successfully");
-  } catch (err) {
-    console.error("MongoDB Connection Failed:", err);
-  }
+  await client.connect();
+  db = client.db("productivity_crm_db");
+  console.log("MongoDB Connected");
 }
 
 connectDB();
@@ -32,6 +28,7 @@ connectDB();
 
 app.post("/login", async (req, res) => {
   try {
+
     const { email, password } = req.body;
 
     const user = await db.collection("users").findOne({ email });
@@ -50,15 +47,15 @@ app.post("/login", async (req, res) => {
     });
 
   } catch (err) {
-    console.log(err);
     res.status(500).send("Server error");
   }
 });
 
-/* ================= ADD PRODUCTIVITY ================= */
+/* ================= ADD RECORD ================= */
 
 app.post("/records", async (req, res) => {
   try {
+
     const { date, task, userId } = req.body;
 
     await db.collection("productivity").insertOne({
@@ -70,15 +67,15 @@ app.post("/records", async (req, res) => {
     res.send("Saved");
 
   } catch (err) {
-    console.log(err);
     res.status(500).send("DB Error");
   }
 });
 
-/* ================= ADMIN RECORDS ================= */
+/* ================= ADMIN ALL RECORDS ================= */
 
 app.get("/records", async (req, res) => {
   try {
+
     const records = await db.collection("productivity").aggregate([
       {
         $lookup: {
@@ -102,7 +99,6 @@ app.get("/records", async (req, res) => {
     res.json(records);
 
   } catch (err) {
-    console.log(err);
     res.status(500).send("DB Error");
   }
 });
@@ -140,69 +136,91 @@ app.get("/records/:userId", async (req, res) => {
     res.json(records);
 
   } catch (err) {
-    console.log(err);
     res.status(500).send("DB Error");
   }
 });
 
-/* ================= FILTER BY DATE ================= */
+/* ================= USER DATE FILTER ================= */
 
 app.get("/records-by-date", async (req, res) => {
   try {
-    const { date, userId, role } = req.query;
 
-    const selectedDate = new Date(date);
-    const nextDate = new Date(selectedDate);
-    nextDate.setDate(selectedDate.getDate() + 1);
+    const { date, userId } = req.query;
 
-    let query = {
-      date: { $gte: selectedDate, $lt: nextDate }
-    };
+    const start = new Date(date);
+    const end = new Date(date);
+    end.setDate(start.getDate() + 1);
 
-    if (role !== "admin") {
-      query.userId = new ObjectId(userId);
-    }
-
-    let records = await db.collection("productivity").find(query).toArray();
-
-    if (role === "admin") {
-      records = await db.collection("productivity").aggregate([
-        { $match: query },
-        {
-          $lookup: {
-            from: "users",
-            localField: "userId",
-            foreignField: "_id",
-            as: "user"
-          }
-        },
-        { $unwind: "$user" },
-        {
-          $project: {
-            date: 1,
-            task: 1,
-            name: "$user.name"
-          }
+    const records = await db.collection("productivity").aggregate([
+      {
+        $match: {
+          userId: new ObjectId(userId),
+          date: { $gte: start, $lt: end }
         }
-      ]).toArray();
-    }
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "userId",
+          foreignField: "_id",
+          as: "user"
+        }
+      },
+      { $unwind: "$user" },
+      {
+        $project: {
+          date: 1,
+          task: 1,
+          name: "$user.name"
+        }
+      }
+    ]).toArray();
 
     res.json(records);
 
   } catch (err) {
-    console.log(err);
     res.status(500).send("DB Error");
   }
 });
 
-/* ================= TEST USERS ================= */
+/* ================= ADMIN DATE FILTER ================= */
 
-app.get("/test-users", async (req, res) => {
+app.get("/admin-records-by-date", async (req, res) => {
   try {
-    const users = await db.collection("users").find().toArray();
-    res.json(users);
+
+    const { date } = req.query;
+
+    const start = new Date(date);
+    const end = new Date(date);
+    end.setDate(start.getDate() + 1);
+
+    const records = await db.collection("productivity").aggregate([
+      {
+        $match: {
+          date: { $gte: start, $lt: end }
+        }
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "userId",
+          foreignField: "_id",
+          as: "user"
+        }
+      },
+      { $unwind: "$user" },
+      {
+        $project: {
+          date: 1,
+          task: 1,
+          name: "$user.name"
+        }
+      }
+    ]).toArray();
+
+    res.json(records);
+
   } catch (err) {
-    console.log(err);
     res.status(500).send("DB Error");
   }
 });
@@ -210,12 +228,11 @@ app.get("/test-users", async (req, res) => {
 /* ================= SERVER ================= */
 
 app.get("/", (req, res) => {
-  res.send("Backend running successfully 🚀");
+  res.send("Backend running 🚀");
 });
-
 
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
-  console.log("Server running on port", PORT);
+  console.log("Server running on", PORT);
 });
