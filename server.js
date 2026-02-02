@@ -19,7 +19,7 @@ let db;
 async function connectDB() {
   try {
     await client.connect();
-    db = client.db(); // default DB from URI
+    db = client.db("productivity_crm_db");
     console.log("MongoDB Connected Successfully");
   } catch (err) {
     console.error("MongoDB Connection Failed:", err);
@@ -186,6 +186,11 @@ app.get("/test-users", async (req, res) => {
 });
 
 /* ================= SERVER ================= */
+
+app.get("/", (req, res) => {
+  res.send("Backend running successfully 🚀");
+});
+
 
 const PORT = process.env.PORT || 5000;
 
