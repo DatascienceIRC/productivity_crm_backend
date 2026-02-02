@@ -111,9 +111,31 @@ app.get("/records", async (req, res) => {
 
 app.get("/records/:userId", async (req, res) => {
   try {
-    const records = await db.collection("productivity").find({
-      userId: new ObjectId(req.params.userId)
-    }).sort({ date: -1 }).toArray();
+
+    const records = await db.collection("productivity").aggregate([
+      {
+        $match: {
+          userId: new ObjectId(req.params.userId)
+        }
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "userId",
+          foreignField: "_id",
+          as: "user"
+        }
+      },
+      { $unwind: "$user" },
+      {
+        $project: {
+          date: 1,
+          task: 1,
+          name: "$user.name"
+        }
+      },
+      { $sort: { date: -1 } }
+    ]).toArray();
 
     res.json(records);
 
