@@ -258,7 +258,7 @@ app.get("/monthly-report", auth, async (req, res) => {
 });
 
 /* ===== USERS (ADMIN) ===== */
-
+/*
 app.get("/users", auth, adminOnly, async (req, res) => {
   try {
     const users = await db.collection("users").find().toArray();
@@ -299,25 +299,7 @@ app.post("/users", auth, adminOnly, async (req, res) => {
   }
 });
 
-app.delete("/users/:id", auth, adminOnly, async (req,res)=>{
-  try {
-
-    if (!ObjectId.isValid(req.params.id)) {
-      return res.status(400).send("Invalid user id");
-    }
-
-    await db.collection("users").deleteOne({
-      _id: new ObjectId(req.params.id)
-    });
-
-    res.send("Deleted");
-
-  } catch(err) {
-    console.error(err);
-    res.status(500).send("Server error");
-  }
-});
-
+*/
 
 /* ===== AUTH ===== */
 
