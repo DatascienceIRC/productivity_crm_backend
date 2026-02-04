@@ -24,15 +24,6 @@ app.use(express.json());
 const client = new MongoClient(process.env.MONGO_URI);
 let db;
 
-(async () => {
-  try {
-    await client.connect();
-    db = client.db("productivity_crm_db");
-    console.log("MongoDB connected");
-  } catch (err) {
-    console.error("MongoDB connection failed", err);
-  }
-})();
 /* ===== LOGIN ===== */
 
 app.post("/login", async (req, res) => {
@@ -89,66 +80,84 @@ app.post("/records", auth, async (req, res) => {
 
 /* ===== ADMIN ALL RECORDS ===== */
 
-app.get("/records", auth, adminOnly, async (req,res)=>{
+app.get("/records", auth, adminOnly, async (req, res) => {
+  try {
+    const data = await db.collection("productivity").aggregate([
+      {
+        $lookup: {
+          from: "users",
+          localField: "userId",
+          foreignField: "_id",
+          as: "user"
+        }
+      },
+      { $unwind: "$user" },
+      {
+        $project: {
+          date: 1,
+          task: 1,
+          name: "$user.name"
+        }
+      },
+      { $sort: { date: -1 } }
+    ]).toArray();
 
-  const data = await db.collection("productivity").aggregate([
-    {
-      $lookup: {
-        from: "users",
-        localField: "userId",
-        foreignField: "_id",
-        as: "user"
-      }
-    },
-    { $unwind: "$user" },
-    {
-      $project: {
-        date: 1,
-        task: 1,
-        name: "$user.name"
-      }
-    },
-    { $sort: { date: -1 } }
-  ]).toArray();
-
-  res.json(data);
+    res.json(data);
+  } catch (err) {
+    console.error("Error fetching all records:", err);
+    res.status(500).send("Server error");
+  }
 });
+
 
 /* ===== USER OWN RECORDS ===== */
 
 app.get("/records/:userId", auth, async (req, res) => {
+  try {
 
-  if (req.user.role !== "admin" && req.user.id !== req.params.userId) {
-    return res.status(403).send("Forbidden");
+    // ✅ ObjectId validation
+    if (!ObjectId.isValid(req.params.userId)) {
+      return res.status(400).send("Invalid user id");
+    }
+
+    // ✅ Access control
+    if (req.user.role !== "admin" && req.user.id !== req.params.userId) {
+      return res.status(403).send("Forbidden");
+    }
+
+    const data = await db.collection("productivity").aggregate([
+      {
+        $match: {
+          userId: new ObjectId(req.params.userId)
+        }
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "userId",
+          foreignField: "_id",
+          as: "user"
+        }
+      },
+      { $unwind: "$user" },
+      {
+        $project: {
+          date: 1,
+          task: 1,
+          name: "$user.name"
+        }
+      },
+      { $sort: { date: -1 } }
+    ]).toArray();
+
+    res.json(data);
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Server error");
   }
-
-  const data = await db.collection("productivity").aggregate([
-    {
-      $match: {
-        userId: new ObjectId(req.params.userId)
-      }
-    },
-    {
-      $lookup: {
-        from: "users",
-        localField: "userId",
-        foreignField: "_id",
-        as: "user"
-      }
-    },
-    { $unwind: "$user" },
-    {
-      $project: {
-        date: 1,
-        task: 1,
-        name: "$user.name"
-      }
-    },
-    { $sort: { date: -1 } }
-  ]).toArray();
-
-  res.json(data);
 });
+
 
 /* ===== SEARCH & FILTER ===== */
 
@@ -251,9 +260,15 @@ app.get("/monthly-report", auth, async (req, res) => {
 /* ===== USERS (ADMIN) ===== */
 
 app.get("/users", auth, adminOnly, async (req, res) => {
-  const users = await db.collection("users").find().toArray();
-  res.json(users);
+  try {
+    const users = await db.collection("users").find().toArray();
+    res.json(users);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Server error");
+  }
 });
+
 
 app.post("/users", auth, adminOnly, async (req, res) => {
   try {
@@ -285,18 +300,36 @@ app.post("/users", auth, adminOnly, async (req, res) => {
 });
 
 app.delete("/users/:id", auth, adminOnly, async (req,res)=>{
-  await db.collection("users").deleteOne({_id:new ObjectId(req.params.id)});
-  res.send("Deleted");
+  try {
+
+    if (!ObjectId.isValid(req.params.id)) {
+      return res.status(400).send("Invalid user id");
+    }
+
+    await db.collection("users").deleteOne({
+      _id: new ObjectId(req.params.id)
+    });
+
+    res.send("Deleted");
+
+  } catch(err) {
+    console.error(err);
+    res.status(500).send("Server error");
+  }
 });
+
 
 /* ===== AUTH ===== */
 
 function auth(req,res,next){
 
- const authHeader = req.headers.authorization;
-if (!authHeader) return res.status(401).send("No token");
+  const authHeader = req.headers.authorization;
 
-const token = authHeader.split(" ")[1];
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).send("Invalid authorization header");
+  }
+
+  const token = authHeader.split(" ")[1];
 
   jwt.verify(token, SECRET, (err, user)=>{
     if(err) return res.status(403).send("Invalid token");
@@ -305,6 +338,7 @@ const token = authHeader.split(" ")[1];
     next();
   });
 }
+
 
 /* ===== Admin middleware ===== */
 
@@ -319,5 +353,29 @@ function adminOnly(req, res, next) {
 /* ===== SERVER ===== */
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on ${PORT}`));
+
+async function startServer() {
+  try {
+    await client.connect();
+    db = client.db("productivity_crm_db");
+
+    console.log("MongoDB connected");
+
+    app.listen(PORT, () =>
+      console.log(`Server running on ${PORT}`)
+    );
+
+  } catch (err) {
+    console.error("Failed to start server", err);
+    process.exit(1); // stops app if DB fails
+  }
+}
+
+startServer();
+
+process.on("SIGINT", async () => {
+  await client.close();
+  console.log("MongoDB disconnected");
+  process.exit(0);
+});
 
