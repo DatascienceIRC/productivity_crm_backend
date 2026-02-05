@@ -164,24 +164,33 @@ app.get("/records/:userId", auth, async (req, res) => {
 app.get("/daily-report", auth, async (req, res) => {
   try {
     const { date } = req.query;
+
+    if (!date) {
+      return res.status(400).send("Date required");
+    }
+
     let match = {};
 
+    // restrict normal users
     if (req.user.role !== "admin") {
       match.userId = new ObjectId(req.user.id);
     }
 
-    if (date) {
-      const start = new Date(date);
-      start.setUTCHours(0,0,0,0);
-
-      const end = new Date(date);
-      end.setUTCHours(23,59,59,999);
-
-      match.date = { $gte: start, $lte: end };
-    }
-
     const data = await db.collection("productivity").aggregate([
+
       { $match: match },
+
+      {
+        $match: {
+          $expr: {
+            $eq: [
+              { $dateToString: { format: "%Y-%m-%d", date: "$date" } },
+              date
+            ]
+          }
+        }
+      },
+
       {
         $lookup: {
           from: "users",
@@ -190,14 +199,19 @@ app.get("/daily-report", auth, async (req, res) => {
           as: "user"
         }
       },
+
       { $unwind: "$user" },
+
       {
         $project: {
           name: "$user.name",
           date: 1,
           task: 1
         }
-      }
+      },
+
+      { $sort: { date: -1 } }
+
     ]).toArray();
 
     res.json(data);
