@@ -160,7 +160,6 @@ app.get("/records/:userId", auth, async (req, res) => {
 
 
 /* ===== SEARCH & FILTER ===== */
-
 app.get("/filter-records", auth, async (req, res) => {
   try {
     const { search, month } = req.query;
