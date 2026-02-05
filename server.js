@@ -159,6 +159,55 @@ app.get("/records/:userId", auth, async (req, res) => {
 });
 
 
+/* ===== DAILY REPORT ===== */
+/* ===== DAILY REPORT ===== */
+app.get("/daily-report", auth, async (req, res) => {
+  try {
+    const { date } = req.query;
+    let match = {};
+
+    if (req.user.role !== "admin") {
+      match.userId = new ObjectId(req.user.id);
+    }
+
+    if (date) {
+      const start = new Date(date);
+      start.setUTCHours(0,0,0,0);
+
+      const end = new Date(date);
+      end.setUTCHours(23,59,59,999);
+
+      match.date = { $gte: start, $lte: end };
+    }
+
+    const data = await db.collection("productivity").aggregate([
+      { $match: match },
+      {
+        $lookup: {
+          from: "users",
+          localField: "userId",
+          foreignField: "_id",
+          as: "user"
+        }
+      },
+      { $unwind: "$user" },
+      {
+        $project: {
+          name: "$user.name",
+          date: 1,
+          task: 1
+        }
+      }
+    ]).toArray();
+
+    res.json(data);
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Server error");
+  }
+});
+
 /* ===== SEARCH & FILTER ===== */
 app.get("/filter-records", auth, async (req, res) => {
   try {
@@ -208,53 +257,7 @@ app.get("/filter-records", auth, async (req, res) => {
   }
 });
 
-/* ===== MONTHLY REPORT ===== */
 
-app.get("/monthly-report", auth, async (req, res) => {
-  try {
-    let match = {};
-
-    if (req.user.role !== "admin") {
-      match.userId = new ObjectId(req.user.id);
-    }
-
-    const report = await db.collection("productivity").aggregate([
-      { $match: match },
-      {
-        $group: {
-          _id: {
-            userId: "$userId",
-            month: { $month: "$date" },
-            year: { $year: "$date" }
-          },
-          totalTasks: { $sum: 1 }
-        }
-      },
-      {
-        $lookup: {
-          from: "users",
-          localField: "_id.userId",
-          foreignField: "_id",
-          as: "user"
-        }
-      },
-      { $unwind: "$user" },
-      {
-        $project: {
-          user: "$user.name",
-          month: "$_id.month",
-          year: "$_id.year",
-          totalTasks: 1
-        }
-      }
-    ]).toArray();
-
-    res.json(report);
-  } catch (err) {
-    console.error(err);
-    res.status(500).send("Server error");
-  }
-});
 
 /* ===== USERS (ADMIN) ===== */
 /*
