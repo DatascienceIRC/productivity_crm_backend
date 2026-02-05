@@ -97,7 +97,8 @@ app.get("/records", auth, adminOnly, async (req, res) => {
         $project: {
           date: 1,
           task: 1,
-          name: "$user.name"
+          name: "$user.name",
+          role: "$user.role"
         }
       },
       { $sort: { date: -1 } }
@@ -145,7 +146,8 @@ app.get("/records/:userId", auth, async (req, res) => {
         $project: {
           date: 1,
           task: 1,
-          name: "$user.name"
+          name: "$user.name",
+          role: "$user.role"
         }
       },
       { $sort: { date: -1 } }
@@ -160,7 +162,7 @@ app.get("/records/:userId", auth, async (req, res) => {
 });
 
 
-/* ===== DAILY REPORT ===== */
+
 /* ===== DAILY REPORT ===== */
 app.get("/daily-report", auth, async (req, res) => {
   try {
@@ -204,11 +206,13 @@ app.get("/daily-report", auth, async (req, res) => {
       { $unwind: "$user" },
 
       {
-        $project: {
-          name: "$user.name",
-          date: 1,
-          task: 1
-        }
+       $project: {
+  date: 1,
+  task: 1,
+  name: "$user.name",
+  role: "$user.role"
+}
+
       },
 
       { $sort: { date: -1 } }
@@ -257,10 +261,12 @@ app.get("/filter-records", auth, async (req, res) => {
       { $unwind: "$user" },
       {
         $project: {
-          date: 1,
-          task: 1,
-          name: "$user.name"
-        }
+  date: 1,
+  task: 1,
+  name: "$user.name",
+  role: "$user.role"
+}
+
       },
       { $sort: { date: -1 } }
     ]).toArray();
