@@ -123,7 +123,7 @@ app.get("/records/:userId", auth, async (req, res) => {
     }
 
     // ✅ Access control
-    if (req.user.role !== "admin" && req.user.id !== req.params.userId) {
+    if (!["admin", "CEO"].includes(req.user.role) && req.user.id !== req.params.userId) {
       return res.status(403).send("Forbidden");
     }
 
@@ -175,9 +175,10 @@ app.get("/daily-report", auth, async (req, res) => {
     let match = {};
 
     // restrict normal users
-    if (req.user.role !== "admin") {
-      match.userId = new ObjectId(req.user.id);
-    }
+    if (!["admin", "CEO"].includes(req.user.role)) {
+  match.userId = new ObjectId(req.user.id);
+}
+
 
     const data = await db.collection("productivity").aggregate([
 
@@ -233,9 +234,10 @@ app.get("/filter-records", auth, async (req, res) => {
     const { search, month } = req.query;
     let match = {};
 
-    if (req.user.role !== "admin") {
-      match.userId = new ObjectId(req.user.id);
-    }
+  if (!["admin", "CEO"].includes(req.user.role)) {
+  match.userId = new ObjectId(req.user.id);
+}
+
 
     if (month) {
       const start = new Date(month + "-01");
@@ -348,12 +350,11 @@ function auth(req,res,next){
 /* ===== Admin middleware ===== */
 
 function adminOnly(req, res, next) {
-  if (!req.user || req.user.role !== "admin") {
-    return res.status(403).send("Admin only");
+  if (!req.user || !["admin", "CEO"].includes(req.user.role)) {
+    return res.status(403).send("Admin or CEO only");
   }
   next();
 }
-
 
 /* ===== SERVER ===== */
 
